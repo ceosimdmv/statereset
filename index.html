@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>State Reset</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&display=swap" rel="stylesheet">
+
+<style>
+body { font-family: Arial; background:#0d0d0d; color:white; padding:16px; }
+
+h2 {
+  font-family: 'Orbitron', sans-serif;
+  letter-spacing: 2px;
+  color:#00c896;
+  text-align:center;
+}
+
+button { width:100%; padding:14px; margin:6px 0; border:none; border-radius:12px; background:#1f1f1f; color:white; }
+.active { background:#00c896; color:black; }
+.card { margin-top:12px; padding:14px; background:#1a1a1a; border-radius:12px; }
+.step { padding:10px; margin:5px 0; background:#2a2a2a; border-radius:8px; cursor:pointer; }
+.selected { background:#00c896; color:black; }
+.save { background:#00c896; color:black; font-weight:bold; }
+.definition { font-size:13px; color:#aaa; margin-bottom:6px; }
+
+.delete {
+  background:#8b0000;
+  padding:6px 10px;
+  font-size:12px;
+  width:auto;
+  margin-top:8px;
+}
+
+.sim-title {
+  color:#00c896;
+  font-weight:bold;
+  letter-spacing:1px;
+  font-size:14px;
+  margin-bottom:6px;
+}
+
+.baseline {
+  border:2px solid #00c896;
+  background:#0f1f1a;
+}
+
+.baseline-title {
+  color:#00c896;
+  font-weight:bold;
+  font-size:16px;
+}
+
+/* NEW: Downshifting Signal */
+.signal {
+  border:2px solid #3399ff;
+  background:#0f1726;
+}
+.signal-title {
+  color:#66b3ff;
+  font-weight:bold;
+}
+</style>
+</head>
+
+<body>
+
+<h2>State Reset</h2>
+
+<button onclick="showMain()">Main</button>
+<button onclick="showHistory()">History</button>
+
+<div id="main"></div>
+<div id="history" style="display:none;"></div>
+
+<script>
+
+let states=[];
+let selected=[];
+let history=JSON.parse(localStorage.getItem("history"))||[];
+
+const defs={
+  overheated:"Body heat too high",
+  restless:"Body needs movement",
+  tired:"Needs rest",
+  overstimulated:"Too much input",
+  low:"Low energy",
+  stomach:"Digestion off",
+  irritable:"Emotional tension",
+  fog:"Low clarity",
+  lightheaded:"Low fuel/hydration",
+  activation:"High internal energy / wired",
+  cantsleep:"Tired but unable to settle",
+  energized:"Calm but has energy available"
+};
+
+const base = {
+
+/* SAME BASE (unchanged) */
+
+overheated:[
+["Go to cooler place","Take cool shower","Sit upright","Drink water","Lie down"],
+["Cold towel","Fan/AC","Remove layers","Hydrate","Rest"],
+["Rinse face","Sit still","Slow breathing","Cool down","Relax"]
+],
+
+restless:[
+["Walk","Stretch","Move body","Sit","Pause"],
+["Pace slowly","Release energy","Sit upright","Breathe","Rest"],
+["Light movement","Ground","Reduce movement","Sit","Still"]
+],
+
+tired:[
+["Lie down","Close eyes","Reduce stimulation","Rest","Sleep"],
+["Dim lights","No phone","Relax body","Nap","Wake slowly"],
+["Eat light food","Hydrate","Sit quietly","Lay down","Rest"]
+],
+
+overstimulated:[
+["Leave environment","Reduce noise","Dim lights","Sit","Close eyes"],
+["No phone","Quiet space","Slow breathing","Lie down","Rest"],
+["Lower input","Sit still","Breathe slowly","Relax","Recover"]
+],
+
+low:[
+["Eat","Drink water","Sit upright","Wait","Recover"],
+["Protein snack","Electrolytes","Sit","Pause","Rest"],
+["Light meal","Hydrate","Sit","Breathe","Recover"]
+],
+
+stomach:[
+["Eat simple food","Drink water","Sit upright","Wait","Digest"],
+["Small portions","Walk slowly","Pause eating","Sit","Rest"],
+["Warm liquids","Sit upright","No heavy food","Wait","Recover"]
+],
+
+irritable:[
+["Pause","Step away","Sit quietly","Breathe","Reset"],
+["No interaction","Sit alone","Slow breathing","Relax","Calm"],
+["Walk","Release tension","Sit","Breathe","Reset"]
+],
+
+fog:[
+["Drink water","Move lightly","Fresh air","Reset","Refocus"],
+["Cold splash","Walk","Breathe","Sit","Focus"],
+["Eat","Hydrate","Move","Pause","Reset"]
+],
+
+lightheaded:[
+["Sit down","Drink water","Stay still","Wait","Recover"],
+["Eat snack","Electrolytes","Sit upright","Breathe","Rest"],
+["Lower head","Hydrate","Pause movement","Sit","Recover"]
+],
+
+activation:[
+["Sit still","Slow breathing","Lower stimulation","Stay upright","Wait"],
+["No phone","Dim lights","Breathe slowly","Calm body","Pause"],
+["Ground body","Feet flat","Hands still","Slow inhale/exhale","Settle"]
+],
+
+cantsleep:[
+["Lie down","Close eyes","No phone","Slow breathing","Wait"],
+["Dim lights","Stay in bed","Relax body","Breathe slowly","Rest"],
+["Get comfortable","Reduce noise","Close eyes","Stay still","Wait"]
+],
+
+energized:[
+["Sit upright","Stay relaxed","Low stimulation","Wait","Settle"],
+["Light movement","Walk slowly","Return","Sit","Relax"],
+["Stay calm","No forcing sleep","Observe body","Breathe","Wait"]
+]
+
+};
+
+function combineProcesses(a,b){
+let result=[];
+for(let i=0;i<3;i++){
+  let p1 = base[a][i];
+  let p2 = base[b][i];
+  result.push([p1[0],p1[1],p2[0],p2[1],p1[2]||p2[2]]);
+}
+return result;
+}
+
+function getProcesses(){
+if(states.length===1) return base[states[0]];
+if(states.length===2) return combineProcesses(states[0],states[1]);
+return [];
+}
+
+function toggleStep(text){
+if(selected.includes(text)){
+  selected = selected.filter(x=>x!==text);
+} else{
+  selected.push(text);
+}
+renderMain();
+}
+
+function renderSteps(list){
+return list.map(x=>
+  `<div class="step ${selected.includes(x)?"selected":""}" onclick="toggleStep('${x}')">${x}</div>`
+).join("");
+}
+
+function toggleState(s){
+let i=states.indexOf(s);
+if(i>-1) states.splice(i,1);
+else{
+  if(states.length>=2) return;
+  states.push(s);
+}
+renderMain();
+}
+
+function saveSession(atBaseline=false){
+history.unshift({
+  states:[...states],
+  steps:[...selected],
+  baseline: atBaseline,
+  time:new Date().toLocaleString()
+});
+localStorage.setItem("history",JSON.stringify(history));
+states=[]; selected=[];
+showHistory();
+renderHistory();
+}
+
+function renderMain(){
+
+function btn(label,key,emoji){
+let a = states.includes(key)?"active":"";
+let d = states.includes(key)?`<div class="definition">${defs[key]}</div>`:"";
+return `<button class="${a}" onclick="toggleState('${key}')">${emoji} ${label}</button>${d}`;
+}
+
+let html = `<h3>States (max 2)</h3>`;
+
+html += btn("Overheated","overheated","🔥");
+html += btn("Restless","restless","⚡");
+html += btn("Tired","tired","💤");
+html += btn("Overstimulated","overstimulated","🧠");
+html += btn("Low Energy","low","🪫");
+html += btn("Stomach Off","stomach","🍽️");
+html += btn("Irritable","irritable","😤");
+html += btn("Brain Fog","fog","🌫️");
+html += btn("Lightheaded","lightheaded","💫");
+html += btn("Activation","activation","⚙️");
+html += btn("Can't Sleep","cantsleep","🌙");
+html += btn("Energized","energized","🔋");
+
+if(states.length>0){
+
+let processes=getProcesses();
+let allSteps=new Set();
+processes.forEach(p=>p.forEach(x=>allSteps.add(x)));
+
+html += processes.map((p,i)=>
+`<div class="card">
+<div class="sim-title">SIMULATION ${i+1}</div>
+${renderSteps(p)}
+</div>`
+).join("");
+
+html += `<div class="card"><b>ALL POSSIBLE OPTIONS</b>${renderSteps([...allSteps])}</div>`;
+}
+
+/* NEW: Downshifting Signal (auto shows when tired or can't sleep) */
+if(states.includes("tired") || states.includes("cantsleep")){
+html += `
+<div class="card signal">
+<div class="signal-title">🌙 DOWNSHIFTING / SLEEP SIGNAL</div>
+<div class="definition">
+Yawning • Feeling cold • Body slowing<br>
+Transition into sleep state
+</div>
+<div class="step">Get warm (blanket)</div>
+<div class="step">Stop movement</div>
+<div class="step">No phone</div>
+<div class="step">Lie down when ready</div>
+<div class="step">Let sleep happen</div>
+</div>
+`;
+}
+
+html += `
+<div class="card baseline">
+<div class="baseline-title">🏁 BASELINE = FINISH LINE</div>
+<div class="definition">
+No pressure • No urgency • Fully stable<br>
+Nothing to fix. You're done.
+</div>
+<button class="save" onclick="saveSession(true)">Finish at Baseline</button>
+<button onclick="saveSession(false)">Save (Unfinished Baseline)</button>
+</div>
+`;
+
+document.getElementById("main").innerHTML=html;
+}
+
+function renderHistory(){
+document.getElementById("history").innerHTML =
+history.map((h,i)=>`
+<div class="card">
+<div onclick="openHistory(${i})">
+<b>${h.states.join(", ")}</b><br>
+${h.time}<br>
+${h.baseline ? "✅ Baseline" : "❌ Not baseline"}
+</div>
+<button class="delete" onclick="deleteHistory(event, ${i})">Delete</button>
+</div>
+`).join("");
+}
+
+function openHistory(i){
+states=[...history[i].states];
+selected=[...history[i].steps];
+showMain();
+renderMain();
+}
+
+function deleteHistory(e,i){
+e.stopPropagation();
+history.splice(i,1);
+localStorage.setItem("history",JSON.stringify(history));
+renderHistory();
+}
+
+function showMain(){
+document.getElementById("main").style.display="block";
+document.getElementById("history").style.display="none";
+}
+
+function showHistory(){
+document.getElementById("main").style.display="none";
+document.getElementById("history").style.display="block";
+renderHistory();
+}
+
+renderMain();
+
+</script>
+</body>
+</html>
