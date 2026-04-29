@@ -1,242 +1,271 @@
-<script>
+<!DOCTYPE html>  <html>  
+<head>  
+<meta charset="UTF-8">  
+<title>Settle</title>  
+<meta name="viewport" content="width=device-width, initial-scale=1.0">  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&display=swap" rel="stylesheet">  <style>  
+body { font-family: Arial; background:#0d0d0d; color:white; padding:16px; }  
+  
+h2 {  
+  font-family: 'Orbitron', sans-serif;  
+  letter-spacing: 2px;  
+  color:#00c896;  
+  text-align:center;  
+}  
+  
+button { width:100%; padding:14px; margin:6px 0; border:none; border-radius:12px; background:#1f1f1f; color:white; }  
+.active { background:#00c896; color:black; }  
+  
+.card { margin-top:12px; padding:14px; background:#1a1a1a; border-radius:12px; }  
+  
+.step { padding:10px; margin:5px 0; background:#2a2a2a; border-radius:8px; cursor:pointer; }  
+.selected { background:#00c896; color:black; }  
+  
+.definition { font-size:13px; color:#aaa; margin-bottom:6px; }  
+  
+.sim-title { color:#00c896; font-weight:bold; }  
+  
+.env-response { border:2px solid #3399ff; background:#0f1726; }  
+.signal { border:2px solid #3399ff; background:#0f1726; }  
+.signal-title { color:#66b3ff; font-weight:bold; }  
+  
+.baseline { border:2px solid #00c896; background:#0f1f1a; }  
+.baseline-title { color:#00c896; font-weight:bold; font-size:16px; }  
+  
+.finish { background:#00c896; color:black; font-weight:bold; }  
+.partial { background:#333; color:#aaa; }  
+  
+.delete {  
+  background:#8b0000;  
+  padding:6px 10px;  
+  font-size:12px;  
+  width:auto;  
+  margin-top:8px;  
+}  
+  
+.arrow {  
+  position:fixed;  
+  top:50%;  
+  right:15px;  
+  transform:translateY(-50%);  
+  font-size:28px;  
+  opacity:0.6;  
+  cursor:pointer;  
+}  
+</style>  </head>  <body>  <h2>Settle</h2>  <button onclick="showMain()">Main</button>
+<button onclick="showHistory()">History</button>
 
-let states=[];
-let selected=new Set();
-let environment=null;
-let history=JSON.parse(localStorage.getItem("history"))||[];
-let openDefs=new Set(); // NEW
-
-/* CLEAN BAD HISTORY ON LOAD */
-history = history.filter(h =>
-  h &&
-  Array.isArray(h.states) &&
-  typeof h.time === "string"
-);
-localStorage.setItem("history", JSON.stringify(history));
-
-function scrollDown(){
-window.scrollTo({top:document.body.scrollHeight, behavior:'smooth'});
-}
-
-/* NEW: STATE DEFINITIONS */
-const definitions = {
-overheated:"Body too hot → needs cooling + reduction",
-restless:"Energy present → needs movement or discharge",
-tired:"Low energy → needs rest or sleep",
-overstimulated:"Too much input → reduce environment",
-low:"Low fuel → needs food + hydration",
-stomach:"Digestive discomfort → simple food + upright posture",
-irritable:"Tension/edge → reduce interaction + reset",
-fog:"Low clarity → light movement + hydration",
-lightheaded:"Low stability → sit + hydrate",
-activation:"Internal energy spike → needs controlled output",
-cantsleep:"Body awake despite fatigue → reduce stimulation",
-energized:"High readiness → stay controlled",
-calm:"Stable baseline → maintain"
-};
-
-const base = {
-overheated:[["Go to cooler place","Take cool shower","Drink water","Rest"],["Cold towel","Remove layers","Hydrate","Rest"],["Rinse face","Sit still","Cool down","Relax"]],
-restless:[["Walk","Stretch","Move body","Pause"],["Pace slowly","Release energy","Breathe","Rest"],["Light movement","Ground","Reduce movement","Still"]],
-tired:[["Lie down","Close eyes","Reduce stimulation","Sleep"],["No phone","Relax body","Nap","Rest"],["Eat light food","Hydrate","Sit quietly","Rest"]],
-overstimulated:[["Leave environment","Reduce noise","Sit","Rest"],["No phone","Quiet space","Slow breathing","Rest"],["Lower input","Sit still","Relax","Recover"]],
-low:[["Eat","Drink water","Sit upright","Recover"],["Protein snack","Electrolytes","Sit","Rest"],["Light meal","Hydrate","Sit","Recover"]],
-stomach:[["Eat simple food","Drink water","Sit upright","Digest"],["Small portions","Walk slowly","Sit","Rest"],["Warm liquids","Sit upright","Wait","Recover"]],
-irritable:[["Pause","Step away","Sit quietly","Reset"],["No interaction","Sit alone","Relax","Calm"],["Walk","Release tension","Sit","Reset"]],
-fog:[["Drink water","Move lightly","Fresh air","Refocus"],["Cold splash","Walk","Breathe","Focus"],["Eat","Hydrate","Move","Reset"]],
-lightheaded:[["Sit down","Drink water","Stay still","Recover"],["Eat snack","Electrolytes","Sit upright","Rest"],["Lower head","Hydrate","Pause movement","Recover"]],
-activation:[["Sit still","Slow breathing","Lower stimulation","Wait"],["No phone","Breathe slowly","Calm body","Pause"],["Ground body","Feet flat","Hands still","Settle"]],
-cantsleep:[["Lie down","Close eyes","No phone","Stay still"],["Get comfortable","No phone","Stay still","Rest"],["No phone","Stay still","Relax","Wait"]],
-energized:[["Sit upright","Stay relaxed","Low stimulation","Wait"],["Light movement","Walk slowly","Sit","Relax"],["Stay calm","Observe body","Breathe","Wait"]],
-calm:[["Sit upright","Relax body","Slow breathing","Stay present"],["No urgency","Keep still","Breathe normally","Remain calm"],["Minimal input","Stay grounded","Observe","Hold state"]]
-};
-
-/* UPDATED */
-function toggleState(s){
-if(states.includes(s)) {
-  states=states.filter(x=>x!==s);
-  openDefs.delete(s);
-}
-else{
-  if(states.length>=2) return;
-  states.push(s);
-  if(openDefs.has(s)) openDefs.delete(s);
-  else openDefs.add(s);
-}
-renderMain();
-}
-
-function toggleStep(text){
-if(selected.has(text)) selected.delete(text);
-else selected.add(text);
-renderMain();
-}
-
-function toggleEnv(e){
-environment = environment===e ? null : e;
-renderMain();
-}
-
-function saveSession(done=false){
-history.unshift({
-states:[...states],
-steps:[...selected],
-environment,
-done,
-time:new Date().toLocaleString()
-});
-localStorage.setItem("history",JSON.stringify(history));
-states=[]; selected=new Set(); environment=null; openDefs.clear();
-showHistory();
-renderHistory();
-}
-
-function renderSteps(list){
-return list.map(x=>`
-<div class="step ${selected.has(x)?"selected":""}" 
-data-step="${x}" 
-onclick="toggleStep(this.dataset.step)">
-${x}
-</div>`).join("");
-}
-
-function renderMain(){
-
-let html=`<h3>Identify Your Current State (max 2)</h3>`;
-
-Object.keys(base).forEach(key=>{
-let labelMap = {
-overheated:"🔥 Overheated",
-restless:"⚡ Restless",
-tired:"💤 Tired",
-overstimulated:"🧠 Overstimulated",
-low:"🐸 Low Energy",
-stomach:"🍽️ Stomach Off",
-irritable:"😤 Irritable",
-fog:"🌫️ Brain Fog",
-lightheaded:"💫 Lightheaded",
-activation:"⚙️ Activation",
-cantsleep:"🌙 Can't Sleep",
-energized:"🔋 Energized",
-calm:"🟢 Calm"
-};
-
-let activeClass = states.includes(key) ? "active" : "";
-
-html+=`
-<button class="${activeClass}" onclick="toggleState('${key}')">
-${labelMap[key]}
-</button>
-${openDefs.has(key) ? `<div class="definition">${definitions[key]}</div>` : ""}
-`;
-});
-
-/* ENV */
-html+=`<h3>Environment</h3>`;
-[
-{key:"supportive", label:"Supportive"},
-{key:"neutral", label:"Neutral"},
-{key:"friction", label:"Friction"}
-].forEach(e=>{
-let activeClass = environment===e.key ? "active" : "";
-html+=`<button class="${activeClass}" onclick="toggleEnv('${e.key}')">${e.label}</button>`;
-});
-
-if(environment){
-let text="";
-if(environment==="supportive") text="Environment supports you → continue";
-if(environment==="neutral") text="Neutral → stay internal";
-if(environment==="friction") text="Friction → reduce input";
-
-html+=`<div class="card env-response"><b>ENVIRONMENT RESPONSE</b><div class="definition">${text}</div></div>`;
-}
-
-/* PROCESSES (UNCHANGED) */
-if(states.length>0){
-let processes=[];
-if(states.length===1) processes=base[states[0]];
-if(states.length===2){
-for(let i=0;i<3;i++){
-processes.push([...new Set([...base[states[0]][i],...base[states[1]][i]])]);
-}
-}
-
-let allSteps=new Set();
-
-html+=processes.map((p,i)=>{
-p.forEach(x=>allSteps.add(x));
-return `<div class="card"><div class="sim-title">PROCESS ${i+1}</div>${renderSteps(p)}</div>`;
-}).join("");
-
-html+=`<div class="card"><b>ALL POSSIBLE OPTIONS</b>${renderSteps([...allSteps])}</div>`;
-}
-
-/* SLEEP */
-if(states.includes("tired") || states.includes("cantsleep")){
-html+=`
-<div class="card signal">
-<div class="signal-title">🌙 DOWNSHIFTED SLEEP SIGNAL</div>
-<div class="definition">Downshifted stimulation • Yawning • Feeling cold • Body slowing</div>
-<div class="step">Get warm</div>
-<div class="step">Reduce stimulation</div>
-<div class="step">No phone</div>
-<div class="step">Lie down</div>
-</div>`;
-}
-
-/* BASELINE */
-html+=`
-<div class="card baseline">
-<div class="baseline-title">🏁 BASELINE = FINISH LINE</div>
-<div class="definition">No pressure • No urgency • Fully stable</div>
-<button class="finish" onclick="saveSession(true)">🏁 Finish</button>
-<button class="partial" onclick="saveSession(false)">Save</button>
-</div>`;
-
-document.getElementById("main").innerHTML=html;
-}
-
-function renderHistory(){
-document.getElementById("history").innerHTML =
-history.map((h,i)=>`
-<div class="card">
-<div onclick="openHistory(${i})">
-<b>${h.states.join(", ")}</b><br>
-${h.time}<br>
-${h.environment ? "Env: "+h.environment+"<br>" : ""}
-${h.done ? "🏁 Finished" : "Saved"}
-</div>
-<button class="delete" onclick="deleteHistory(event,${i})">Delete</button>
-</div>`).join("");
-}
-
-function openHistory(i){
-states=[...history[i].states];
-selected=new Set(history[i].steps);
-environment=history[i].environment;
-openDefs=new Set(states); // show defs when loading
-showMain();
-renderMain();
-}
-
-function deleteHistory(e,i){
-e.stopPropagation();
-history.splice(i,1);
-localStorage.setItem("history",JSON.stringify(history));
-renderHistory();
-}
-
-function showMain(){
-document.getElementById("main").style.display="block";
-document.getElementById("history").style.display="none";
-}
-
-function showHistory(){
-document.getElementById("main").style.display="none";
-document.getElementById("history").style.display="block";
-renderHistory();
-}
-
-renderMain();
-
-</script>
+<div id="main"></div>  
+<div id="history" style="display:none;"></div>  <div class="arrow" onclick="scrollDown()">↓</div>  <script>  
+  
+let states=[];  
+let selected=new Set();  
+let environment=null;  
+let history=JSON.parse(localStorage.getItem("history"))||[];  
+  
+/* CLEAN BAD HISTORY ON LOAD */  
+history = history.filter(h =>  
+  h &&  
+  Array.isArray(h.states) &&  
+  typeof h.time === "string"  
+);  
+localStorage.setItem("history", JSON.stringify(history));  
+  
+function scrollDown(){  
+window.scrollTo({top:document.body.scrollHeight, behavior:'smooth'});  
+}  
+  
+const base = {  
+  
+overheated:[["Go to cooler place","Take cool shower","Drink water","Rest"],["Cold towel","Remove layers","Hydrate","Rest"],["Rinse face","Sit still","Cool down","Relax"]],  
+restless:[["Walk","Stretch","Move body","Pause"],["Pace slowly","Release energy","Breathe","Rest"],["Light movement","Ground","Reduce movement","Still"]],  
+tired:[["Lie down","Close eyes","Reduce stimulation","Sleep"],["No phone","Relax body","Nap","Rest"],["Eat light food","Hydrate","Sit quietly","Rest"]],  
+overstimulated:[["Leave environment","Reduce noise","Sit","Rest"],["No phone","Quiet space","Slow breathing","Rest"],["Lower input","Sit still","Relax","Recover"]],  
+low:[["Eat","Drink water","Sit upright","Recover"],["Protein snack","Electrolytes","Sit","Rest"],["Light meal","Hydrate","Sit","Recover"]],  
+stomach:[["Eat simple food","Drink water","Sit upright","Digest"],["Small portions","Walk slowly","Sit","Rest"],["Warm liquids","Sit upright","Wait","Recover"]],  
+irritable:[["Pause","Step away","Sit quietly","Reset"],["No interaction","Sit alone","Relax","Calm"],["Walk","Release tension","Sit","Reset"]],  
+fog:[["Drink water","Move lightly","Fresh air","Refocus"],["Cold splash","Walk","Breathe","Focus"],["Eat","Hydrate","Move","Reset"]],  
+lightheaded:[["Sit down","Drink water","Stay still","Recover"],["Eat snack","Electrolytes","Sit upright","Rest"],["Lower head","Hydrate","Pause movement","Recover"]],  
+activation:[["Sit still","Slow breathing","Lower stimulation","Wait"],["No phone","Breathe slowly","Calm body","Pause"],["Ground body","Feet flat","Hands still","Settle"]],  
+cantsleep:[["Lie down","Close eyes","No phone","Stay still"],["Get comfortable","No phone","Stay still","Rest"],["No phone","Stay still","Relax","Wait"]],  
+energized:[["Sit upright","Stay relaxed","Low stimulation","Wait"],["Light movement","Walk slowly","Sit","Relax"],["Stay calm","Observe body","Breathe","Wait"]],  
+calm:[["Sit upright","Relax body","Slow breathing","Stay present"],["No urgency","Keep still","Breathe normally","Remain calm"],["Minimal input","Stay grounded","Observe","Hold state"]]  
+  
+};  
+  
+function toggleState(s){  
+if(states.includes(s)) states=states.filter(x=>x!==s);  
+else{  
+if(states.length>=2) return;  
+states.push(s);  
+}  
+renderMain();  
+}  
+  
+function toggleStep(text){  
+if(selected.has(text)) selected.delete(text);  
+else selected.add(text);  
+renderMain();  
+}  
+  
+function toggleEnv(e){  
+environment = environment===e ? null : e;  
+renderMain();  
+}  
+  
+function saveSession(done=false){  
+history.unshift({  
+states:[...states],  
+steps:[...selected],  
+environment,  
+done,  
+time:new Date().toLocaleString()  
+});  
+localStorage.setItem("history",JSON.stringify(history));  
+states=[]; selected=new Set(); environment=null;  
+showHistory();  
+renderHistory();  
+}  
+  
+function renderSteps(list){  
+return list.map(x=>`  
+<div class="step ${selected.has(x)?"selected":""}"   
+data-step="${x}"   
+onclick="toggleStep(this.dataset.step)">  
+${x}  
+</div>`).join("");  
+}  
+  
+function renderMain(){  
+  
+let html=`<h3>Identify Your Current State (max 2)</h3>`;  
+  
+Object.keys(base).forEach(key=>{  
+let labelMap = {  
+overheated:"🔥 Overheated",  
+restless:"⚡ Restless",  
+tired:"💤 Tired",  
+overstimulated:"🧠 Overstimulated",  
+low:"🐸 Low Energy",  
+stomach:"🍽️ Stomach Off",  
+irritable:"😤 Irritable",  
+fog:"🌫️ Brain Fog",  
+lightheaded:"💫 Lightheaded",  
+activation:"⚙️ Activation",  
+cantsleep:"🌙 Can't Sleep",  
+energized:"🔋 Energized",  
+calm:"🟢 Calm"  
+};  
+  
+let activeClass = states.includes(key) ? "active" : "";  
+html+=`<button class="${activeClass}" onclick="toggleState('${key}')">${labelMap[key]}</button>`;  
+});  
+  
+/* ENV */  
+html+=`<h3>Environment</h3>`;  
+[  
+{key:"supportive", label:"Supportive"},  
+{key:"neutral", label:"Neutral"},  
+{key:"friction", label:"Friction"}  
+].forEach(e=>{  
+let activeClass = environment===e.key ? "active" : "";  
+html+=`<button class="${activeClass}" onclick="toggleEnv('${e.key}')">${e.label}</button>`;  
+});  
+  
+if(environment){  
+let text="";  
+if(environment==="supportive") text="Environment supports you → continue";  
+if(environment==="neutral") text="Neutral → stay internal";  
+if(environment==="friction") text="Friction → reduce input";  
+  
+html+=`<div class="card env-response"><b>ENVIRONMENT RESPONSE</b><div class="definition">${text}</div></div>`;  
+}  
+  
+/* PROCESSES */  
+if(states.length>0){  
+let processes=[];  
+if(states.length===1) processes=base[states[0]];  
+if(states.length===2){  
+for(let i=0;i<3;i++){  
+processes.push([...new Set([...base[states[0]][i],...base[states[1]][i]])]);  
+}  
+}  
+  
+let allSteps=new Set();  
+  
+html+=processes.map((p,i)=>{  
+p.forEach(x=>allSteps.add(x));  
+return `<div class="card"><div class="sim-title">PROCESS ${i+1}</div>${renderSteps(p)}</div>`;  
+}).join("");  
+  
+html+=`<div class="card"><b>ALL POSSIBLE OPTIONS</b>${renderSteps([...allSteps])}</div>`;  
+}  
+  
+/* SLEEP */  
+if(states.includes("tired") || states.includes("cantsleep")){  
+html+=`  
+<div class="card signal">  
+<div class="signal-title">🌙 DOWNSHIFTED SLEEP SIGNAL</div>  
+<div class="definition">Downshifted stimulation • Yawning • Feeling cold • Body slowing</div>  
+<div class="step">Get warm</div>  
+<div class="step">Reduce stimulation</div>  
+<div class="step">No phone</div>  
+<div class="step">Lie down</div>  
+</div>`;  
+}  
+  
+/* BASELINE */  
+html+=`  
+<div class="card baseline">  
+<div class="baseline-title">🏁 BASELINE = FINISH LINE</div>  
+<div class="definition">No pressure • No urgency • Fully stable</div>  
+<button class="finish" onclick="saveSession(true)">🏁 Finish</button>  
+<button class="partial" onclick="saveSession(false)">Save</button>  
+</div>`;  
+  
+document.getElementById("main").innerHTML=html;  
+}  
+  
+function renderHistory(){  
+document.getElementById("history").innerHTML =  
+history.map((h,i)=>`  
+<div class="card">  
+<div onclick="openHistory(${i})">  
+<b>${h.states.join(", ")}</b><br>  
+${h.time}<br>  
+${h.environment ? "Env: "+h.environment+"<br>" : ""}  
+${h.done ? "🏁 Finished" : "Saved"}  
+</div>  
+<button class="delete" onclick="deleteHistory(event,${i})">Delete</button>  
+</div>`).join("");  
+}  
+  
+function openHistory(i){  
+states=[...history[i].states];  
+selected=new Set(history[i].steps);  
+environment=history[i].environment;  
+showMain();  
+renderMain();  
+}  
+  
+function deleteHistory(e,i){  
+e.stopPropagation();  
+history.splice(i,1);  
+localStorage.setItem("history",JSON.stringify(history));  
+renderHistory();  
+}  
+  
+function showMain(){  
+document.getElementById("main").style.display="block";  
+document.getElementById("history").style.display="none";  
+}  
+  
+function showHistory(){  
+document.getElementById("main").style.display="none";  
+document.getElementById("history").style.display="block";  
+renderHistory();  
+}  
+  
+renderMain();  
+  
+</script>  </body>  
+</html>
