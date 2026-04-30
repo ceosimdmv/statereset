@@ -156,11 +156,11 @@ renderHistory();
 }
 
 function renderSteps(list){
-return list.map(x=>`
+return list.map((x,i)=>`
 <div class="step ${selected.has(x)?"selected":""}" 
 data-step="${x}" 
 onclick="toggleStep(this.dataset.step)">
-${x}
+Step ${i+1}: ${x}
 </div>`).join("");
 }
 
@@ -212,12 +212,13 @@ processes.push([...new Set([...base[states[0]][i],...base[states[1]][i]])]);
 }
 
 let allSteps=new Set();
+const optionLabels = ["A","B","C"];
 
-html+=`<div class="definition">Choose the process set that fits your state best</div>`;
+html+=`<div class="definition">Choose the best process option that works best for you</div>`;
 
 html+=processes.map((p,i)=>{
 p.forEach(x=>allSteps.add(x));
-return `<div class="card"><div class="sim-title">PROCESS SET ${i+1}</div>${renderSteps(p)}</div>`;
+return `<div class="card"><div class="sim-title">PROCESS OPTION ${optionLabels[i]}</div>${renderSteps(p)}</div>`;
 }).join("");
 
 html+=`
